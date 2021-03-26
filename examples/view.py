@@ -1,4 +1,4 @@
-import vnxvideo
+import vnxpy
 import numpy as np
 import cv2
 
@@ -11,7 +11,7 @@ def onsample(sample, timestamp):
 
 cv2.imshow("vnxpy view", np.zeros([600,800]))
 
-vv = vnxvideo.Vnxvideo()
+vv = vnxpy.Vnxvideo()
 
 with vv.local_client("rend0", onformat, onsample) as c:
     c.start()

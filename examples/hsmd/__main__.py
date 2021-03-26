@@ -1,5 +1,4 @@
-import vnxvideo
-import extproc
+import vnxpy
 
 import numpy as np
 from skimage.transform import downscale_local_mean
@@ -12,7 +11,7 @@ import hornschunck as hs
 
 #vv = vnxvideo.Vnxvideo()
 
-class HornShunckMotionEstimator(extproc.Analytics1):
+class HornShunckMotionEstimator(vnxpy.Analytics1):
 
     def onformat(self,colorspace,width,height):
         downscale=round(max(1,width/400,height/300))
@@ -21,7 +20,7 @@ class HornShunckMotionEstimator(extproc.Analytics1):
     prev : np.ndarray = np.zeros(0)
     downscale = (1,1)
 
-    def onsample(self, sample : vnxvideo.RawSample, timestamp):
+    def onsample(self, sample : vnxpy.RawSample, timestamp):
         cur = downscale_local_mean(sample.gray8().astype(float)/255.0, self.downscale)
         if self.prev.size == cur.size:
             u, v=hs.HornSchunck(self.prev, cur, Niter=2)
