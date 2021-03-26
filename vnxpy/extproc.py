@@ -2,7 +2,7 @@ import sys
 import json
 import fileinput
 
-import vnxvideo
+from .vnxvideo import *
 
 class Logging:
     @staticmethod
@@ -77,13 +77,13 @@ class Analytics1(ExtProc):
     def onsample(self, sample, timestamp):
         pass
 
-    vnxvideo: vnxvideo.Vnxvideo
-    __lc: vnxvideo.LocalClient
+    vnxvideo: Vnxvideo
+    __lc: LocalClient
 
-    def __init__(self, vv : vnxvideo.Vnxvideo = None):
+    def __init__(self, vv : Vnxvideo = None):
         super().__init__()
         if vv == None:
-            self.vnxvideo = vnxvideo.Vnxvideo()
+            self.vnxvideo = Vnxvideo()
         else:
             self.vnxvideo = vv
         

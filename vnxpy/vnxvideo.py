@@ -122,6 +122,16 @@ class RawSample:
         x=self.__vnxdll.vnxvideo_raw_sample_get_data(self.__sample, self.__strides, self.__planes)
         _checkReturn(x,'vnxvideo_raw_sample_get_data')
 
+    @property
+    def width(self):
+        self._get_data()
+        return self.__w.value
+
+    @property
+    def height(self):
+        self._get_data()
+        return self.__h.value
+
     def gray8(self):
         self._get_data()
         y = np.ctypeslib.as_array(self.__planes[0], (self.__h.value, self.__strides[0]))
