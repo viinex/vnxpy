@@ -2,16 +2,19 @@ import vnxpy
 
 import numpy as np
 from skimage.transform import downscale_local_mean
-#import cv2
-import json
-import sys
-import fileinput
+import datetime
 
 import hornschunck as hs
 
-#vv = vnxvideo.Vnxvideo()
-
 class HornShunckMotionEstimator(vnxpy.Analytics1):
+
+    def __init__(self, vv: vnxpy.Vnxvideo = None):
+        super().__init__(vv)
+        if 'skip' in self.config:
+            self.skip = self.config['skip']
+        else:
+            self.skip = 4
+        self.nframe = 0
 
     def onformat(self,colorspace,width,height):
         downscale=round(max(1,width/400,height/300))
@@ -22,33 +25,14 @@ class HornShunckMotionEstimator(vnxpy.Analytics1):
 
     def onsample(self, sample : vnxpy.RawSample, timestamp):
         cur = downscale_local_mean(sample.gray8().astype(float)/255.0, self.downscale)
-        if self.prev.size == cur.size:
+        process = self.skip == 0 or self.nframe % (self.skip + 1) == 0
+        if self.prev.size == cur.size and process:
             u, v=hs.HornSchunck(self.prev, cur, Niter=2)
             cx = sum(u.flat)/u.size
             cy = sum(v.flat)/v.size
-            self.event('GlobalMotionVector', {'x': cx, 'y': cy, 'timestamp': timestamp})
-            #self.prev.free()
-            #print("free")
-        self.prev = cur # sample.dup()
-        #print("dup")
-        #cv2.imshow('pppp',cur)
+            ts = datetime.datetime.fromtimestamp(timestamp/1000.0, tz=datetime.timezone.utc).isoformat().replace('+00:00', 'Z')
+            self.event('GlobalMotionVector', {'x': cx, 'y': cy, 'timestamp': ts})
+        self.prev = cur
+        self.nframe = self.nframe + 1
 
-    # @property
-    # def video_source(self):
-    #     return "rend0"
-
-#cv2.imshow("pppp", np.random.randn(600,800))
 HornShunckMotionEstimator().run()
-
-
-# cfgs = sys.stdin.readline()
-# print(cfgs)
-# cfg = json.loads(cfgs)
-# print(cfg)
-
-# with vv.local_client("rend0", hse.onformat, hse.onsample) as c:
-# #    cv2.waitKey()
-#     c.start()
-# #    cv2.waitKey()
-#     for line in fileinput.input():
-#         pass
