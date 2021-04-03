@@ -7,7 +7,7 @@ from .vnxvideo import *
 class Logging:
     @staticmethod
     def __log(prefix='I', *args, **kwargs):
-        print(prefix, *args, file=sys.stderr, **kwargs)
+        print(prefix, *args, file=sys.stderr, flush=True, **kwargs)
 
     @staticmethod
     def log(*args, **kwargs):
@@ -41,7 +41,8 @@ class ExtProc:
 
     @staticmethod
     def event(topic, data): # following the convention from Viinex JS API
-        print(json.dumps({'topic': topic, 'data': data}))
+        print(json.dumps({'topic': topic, 'data': data}), flush=True)
+
 
     @property
     def config(self):
