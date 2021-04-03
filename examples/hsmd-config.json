@@ -1,0 +1,37 @@
+{
+    "objects":
+    [
+        {
+            "type": "renderer",
+            "name": "rend1",
+            "share": true,
+            "dynamic": true,
+            "layout": {
+                "size": [640, 360],
+                "viewports": [
+                    {
+                        "input": 0,
+                        "src": [0,0,1,1],
+                        "dst": [0,0,1,1]
+                    }
+                ]
+            }
+        },
+        {
+            "type": "process",
+            "name": "md1",
+            "executable": "c:\\Software\\Python38\\python.exe",
+            "args": ["C:\\Projects\\vnxpy\\examples\\hsmd"],
+            "init": {
+                "video_source": "rend1",
+                "skip": 4
+            }
+        }
+    ],
+    "links":
+    [
+        ["rend1","cam1"],
+        [["web0","webrtc0"], ["rend1"]],
+        ["web0","md1"]
+    ]
+}
