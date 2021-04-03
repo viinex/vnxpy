@@ -28,6 +28,7 @@ https://www.python.org/downloads/windows/ (for example this one https://www.pyth
 This won't interfere with existing Python install; neither it would ask unnecessary questions on PATH modification, and so on.
 Unpack this archive somewhere (let's assume that would be the `c:\python-3.8.9-embed-amd64` folder). After that, modify the `python38._pth` file
 in that folder so that the file reads
+
 ```
 python38.zip
 .
@@ -36,18 +37,24 @@ lib\site-packages
 # Uncomment to run site.main() automatically
 #import site
 ```
+
 (e.g. the line `lib\site-packages` needs to be added).
 Also, download the `get-pip.py` script from https://bootstrap.pypa.io/get-pip.py.
 Run that script using the embedded Python:
+
 ```
 c:\python-3.8.9-embed-amd64\python.exe \path\to\get-pip.py
 ```
+
 After this script runs successfully, you should be able to use `pip` in order to install required packages:
+
 ```
 c:\python-3.8.9-embed-amd64\python.exe -m pip install numpy scikit-image pyzbar
 c:\python-3.8.9-embed-amd64\python.exe -m pip install \path\to\vnxpy
 ```
+
 Upon completion of these steps, the examples from vnxpy should be runnable with commads like:
+
 ```
 c:\python-3.8.9-embed-amd64\python.exe \path\to\vnxpy\examples\qr.py
 c:\python-3.8.9-embed-amd64\python.exe \path\to\vnxpy\examples\hsmd
@@ -56,10 +63,13 @@ c:\python-3.8.9-embed-amd64\python.exe \path\to\vnxpy\examples\hsmd
 Linux
 -----
 On Linux, use your local Python 3 installation. Add the vnxpy module by checking out this repository and issuing the commands
+
 ```
 pip install numpy scikit-image pyzbar /path/to/vnxpy
 ```
+
 Upon completion of these steps, the examples from vnxpy should be runnable with commands like:
+
 ```
 python /path/to/vnxpy/examples/qr.py
 python /path/to/vnxpy/examples/hsmd
