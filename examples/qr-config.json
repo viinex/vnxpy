@@ -6,7 +6,7 @@
             "name": "rend1",
             "share": true,
             "layout": {
-                "size": [640, 360],
+                "size": [1280, 720],
                 "viewports": [
                     {
                         "input": 0,
@@ -21,12 +21,11 @@
         },
         {
             "type": "process",
-            "name": "md1",
+            "name": "qr1",
             "executable": "C:\\Software\\python-3.8.9-embed-amd64\\python.exe",
-            "args": ["C:\\Projects\\vnxpy\\examples\\hsmd"],
+            "args": ["C:\\Projects\\vnxpy\\examples\\qr.py"],
             "init": {
-                "video_source": "rend1",
-                "skip": 4
+                "video_source": "rend1"
             }
         }
     ],
@@ -34,6 +33,6 @@
     [
         ["rend1","cam1"],
         [["web0","webrtc0"], ["rend1"]],
-        ["web0","md1"]
+        ["web0","qr1"]
     ]
 }
