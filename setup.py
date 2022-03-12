@@ -9,7 +9,7 @@ with open('LICENSE') as f:
 
 setup(
     name='vnxpy',
-    version='0.0.1',
+    version='0.1.2',
     description='An integration module for vnxvideo library of Viinex',
     long_description=readme,
     author='German Zhyvotnikov',
