@@ -4,7 +4,7 @@ import numpy as np
 
 def _checkReturn(code, name):
     if code!=0:
-        raise name+' failed with code '+code
+        raise Exception('{0} failed with code {1}'.format(name,code))
 
 class Vnxvideo:
     __vnxdll = None
@@ -21,6 +21,9 @@ class Vnxvideo:
 
     def local_client(self, objname, onFormat, onRawSample):
         return LocalClient(self.__vnxdll, objname, onFormat, onRawSample)
+
+    def local_server(self, objname, apertureMB):
+        return LocalServer(self.__vnxdll, objname, apertureMB)
 
 
 class LocalClient:
@@ -77,6 +80,113 @@ class LocalClient:
         self.close()
     def __del__(self):
         self.close()
+
+class LocalServer:
+    __vnxdll = None
+    __pserver = None
+    __allocator = None
+    __last_exception = None
+
+    __last_format = None
+
+    def __init__(self, vnxdll, objname, aperture):
+        self.__vnxdll = vnxdll
+        self.__pserver = c_void_p(None)
+        self.__allocator = c_void_p(None)
+        action = self.CB_ACTION(lambda usrptr: self.__do_init(objname, aperture))
+        x = self.__vnxdll.vnxvideo_with_shm_allocator_str(c_char_p(objname.encode()), c_int(aperture), action, c_void_p(None))
+        _checkReturn(x, "vnxvideo_with_shm_allocator_str failed")
+        if self.__last_exception != None:
+            e = self.__last_exception
+            self.__last_exception = None
+            raise e
+
+    def __do_init(self, objname, aperture):
+        try:
+            x=self.__vnxdll.vnxvideo_local_server_create(c_char_p(objname.encode()), c_int(aperture), byref(self.__pserver))
+            _checkReturn(x, "vnxvideo_local_server_create")
+            self.__vnxdll.vnxvideo_shm_allocator_duplicate(byref(self.__allocator))
+        except BaseException as e:
+            self.__last_exception = e
+
+    def close(self):
+        if self.__pserver.value != None:
+            self.__vnxdll.vnxvideo_rawproc_free(self.__pserver)
+            self.__pserver = c_void_p(None)
+            self.__vnxdll.vnxvideo_shm_allocator_free(self.__allocator)
+            self.__allocator = c_void_p(None)
+
+    def __enter__(self):
+        return self
+    def __exit__(self, exct, excn, tb):
+        self.close()
+    def __del__(self):
+        self.close()
+
+    def __check_format(self, w, h):
+        if self.__pserver.value == None:
+            raise Exception('local server is not in open state')
+        if (w, h) != self.__last_format:
+            x = self.__vnxdll.vnxvideo_rawproc_set_format(self.__pserver, c_int(1), c_int(w), c_int(h))
+            _checkReturn(x, 'vnxvideo_rawproc_set_format')
+            self.__last_format = (w, h)
+
+    CB_ACTION = CFUNCTYPE(None, c_void_p)
+
+    def publish_rgb(self, img, timestamp):
+        h, w, _ = img.shape
+        self.__check_format(w, h)
+        action = self.CB_ACTION(lambda usrptr: self.__do_publish(img, timestamp))
+        x = self.__vnxdll.vnxvideo_with_shm_allocator_ptr(self.__allocator, action, None)
+        _checkReturn(x, 'vnxvideo_with_shm_allocator_ptr')
+        if self.__last_exception != None:
+            e = self.__last_exception
+            self.__last_exception = None
+            raise e
+        
+
+    def __do_publish(self, img, timestamp):
+        sample = c_void_p(None)
+        try:
+            w, h = self.__last_format
+            x = self.__vnxdll.vnxvideo_raw_sample_allocate(c_int(1), c_int(w), c_int(h), byref(sample))
+            _checkReturn(x, "vnxvideo_raw_sample_allocate")
+
+            strides = STRIDES4(0,0,0,0)
+            planes = PLANES4(None,None,None,None)
+            x = self.__vnxdll.vnxvideo_raw_sample_get_data(sample, strides, planes)
+            _checkReturn(x, "vnxvideo_raw_sample_get_data")
+
+            y, u, v = rgb2yuv(img)
+            copy_planar_data_u8(planes[0], strides[0], y)
+            copy_planar_data_u8(planes[1], strides[1], u)
+            copy_planar_data_u8(planes[2], strides[2], v)
+
+            x = self.__vnxdll.vnxvideo_rawproc_process(self.__pserver, sample, c_uint64(timestamp))
+            _checkReturn(x, "vnxvideo_raw_rawproc_process")
+        except BaseException as e:
+            self.__last_exception = e
+        finally:
+            self.__vnxdll.vnxvideo_raw_sample_free(sample)
+            
+        
+def copy_planar_data_u8(plane, stride, src):
+    """
+    Copies the data of 2-dimensional numpy array 'src' into a raw memory buffer
+    starting at 'plane' (pointer) and having the pitch value of 'stride'.
+    """
+    (h, w) = src.shape
+    if src.__array_interface__['strides'] != None:
+        raise Exception('non-null strides not supported')
+    if w > stride:
+        raise Exception('source width is larger than destination stride')
+    s = src.__array_interface__['data'][0]
+    d = cast(plane, c_void_p).value
+    for y in range(0, h):
+        memmove(d, s, w)
+        s = s + w
+        d = d + stride
+
 
 STRIDES4 = c_int * 4
 PLANES4 = POINTER(c_uint8) * 4
@@ -168,17 +278,6 @@ class RawSample:
         return yuv2rgb(yuv) #np.dstack([y,u,v])/255.0
 
 def yuv2rgb(yuv):
-    # not quite accurate transform, but not sure how to figure out the proper matrix
-    # m = np.array([
-    #         [1.000,  1.000, 1.000],
-    #         [0.000, -0.394, 2.032],
-    #         [1.130, -0.581, 0.000],
-    #     ])    
-    # m = np.array([
-    #         [1.164,  1.164, 1.164],
-    #         [0.000, -0.392, 2.017],
-    #         [1.596, -0.813, 0.000],
-    #     ])    
     m = np.array([
             [1.164,  1.164, 1.164],
             [0.000, -0.392, 2.017],
@@ -195,3 +294,16 @@ def yuv2rgb(yuv):
     rgb = np.dot(yuv, m).clip(0.0, 1.0)
 
     return rgb
+
+def rgb2yuv(rgb):
+    m = np.array([[0.098, 0.504, 0.257],
+                  [0.439, -0.291, -0.148],
+                  [-0.071, -0.368, 0.439]]).T
+    
+    yuv = np.dot(rgb.astype(np.float), m)
+    
+    y = (yuv[:,:,0] + 16.0).clip(16.0, 235.0).astype(np.uint8, order='C')
+    u = (yuv[::2, ::2, 1] + 128.0).clip(16.0, 240.0).astype(np.uint8, order='C')
+    v = (yuv[::2, ::2, 2] + 128.0).clip(16.0, 240.0).astype(np.uint8, order='C')
+
+    return y, u, v
