@@ -14,7 +14,7 @@ class Vnxvideo:
             if os.name=='nt':
                 libpath = os.environ['PROGRAMFILES']+"\\Viinex\\bin\\vnxvideo.dll"
             else:
-                libpath = '/usr/lib/vnxvideo.so'
+                libpath = '/usr/lib/libvnxvideo.so'
         self.__vnxdll=cdll.LoadLibrary(libpath)
         x=self.__vnxdll.vnxvideo_init(None,None,None)
         _checkReturn(x,'vnxvideo_init')
