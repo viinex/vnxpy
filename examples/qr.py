@@ -4,6 +4,8 @@ from vnxpy import *
 
 class QrReader(Analytics1):
     def onsample(self, sample : RawSample, timestamp):
+        if not sample.is_video:
+            return
         ds=pyzbar.pyzbar.decode(sample.gray8())
         # here's what decode() retutns:
         # [Decoded(data=b'datadata', type='QRCODE', rect=Rect(left=236, top=322, width=91, height=102), polygon=[Point(x=236, y=330), Point(x=243, y=424), Point(x=327, y=413), Point(x=321, y=322)])]

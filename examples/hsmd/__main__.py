@@ -17,6 +17,8 @@ class HornShunckMotionEstimator(vnxpy.Analytics1):
         self.nframe = 0
 
     def onformat(self,colorspace,width,height):
+        if colorspace >= vnxpy.EMF_AUDIO:
+            return
         downscale=round(max(1,width/400,height/300))
         self.downscale=(downscale,downscale)
 
@@ -24,6 +26,8 @@ class HornShunckMotionEstimator(vnxpy.Analytics1):
     downscale = (1,1)
 
     def onsample(self, sample : vnxpy.RawSample, timestamp):
+        if not sample.is_video:
+            return        
         cur = downscale_local_mean(sample.gray8().astype(float)/255.0, self.downscale)
         process = self.skip == 0 or self.nframe % (self.skip + 1) == 0
         if self.prev.size == cur.size and process:

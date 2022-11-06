@@ -191,6 +191,11 @@ def copy_planar_data_u8(plane, stride, src):
 STRIDES4 = c_int * 4
 PLANES4 = POINTER(c_uint8) * 4
 
+EMF_NONE = 0
+EMF_I420 = 1
+EMF_NV12 = 3
+EMF_AUDIO = 31
+
 class RawSample:
     __vnxdll : c_void_p
     __sample : c_void_p
@@ -223,11 +228,11 @@ class RawSample:
     def __del__(self):
         self.free()
     def _get_data(self):
-        if self.__csp.value != 0:
+        if self.__csp.value != EMF_NONE:
             return
         x=self.__vnxdll.vnxvideo_raw_sample_get_format(self.__sample, byref(self.__csp), byref(self.__w), byref(self.__h))
         _checkReturn(x,'vnxvideo_raw_sample_get_format')
-        if self.__csp.value != 1 and self.__csp.value != 3:
+        if self.__csp.value != EMF_I420 and self.__csp.value != EMF_NV12 and self.__csp.value < EMF_AUDIO:
             raise "Viinex frame formats other than YUV420 planar and NV12 are not supported here"
         x=self.__vnxdll.vnxvideo_raw_sample_get_data(self.__sample, self.__strides, self.__planes)
         _checkReturn(x,'vnxvideo_raw_sample_get_data')
@@ -241,6 +246,16 @@ class RawSample:
     def height(self):
         self._get_data()
         return self.__h.value
+
+    @property
+    def is_audio(self):
+        self._get_data()
+        return self.__csp.value >= EMF_AUDIO
+
+    @property
+    def is_video(self):
+        self._get_data()
+        return self.__csp.value < EMF_AUDIO
 
     def gray8(self):
         self._get_data()
@@ -256,7 +271,7 @@ class RawSample:
         if self.__w.value != self.__strides[0]:
             y = y[:, 0:(self.__w.value-1)]
 
-        if self.__csp.vslue == 1: # I420 planar
+        if self.__csp.value == EMF_I420:
             w2 = round(self.__w.value / 2)
             h2 = round(self.__h.value / 2)
             u = np.ctypeslib.as_array(self.__planes[1], (h2, self.__strides[1]))
@@ -265,7 +280,7 @@ class RawSample:
             v = np.ctypeslib.as_array(self.__planes[2], (h2, self.__strides[2]))
             if self.__strides[2] != w2:
                 v = v[:, 0:(w2 - 1)]
-        if self.__csp.value == 3: # NV12
+        if self.__csp.value == EMF_NV12:
             uv = np.ctypeslib.as_array(self.__planes[1], (self.__h.value, self.__strides[1]))
             u = uv[:, 0:2:]
             v = uv[:, 1:2:]
