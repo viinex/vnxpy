@@ -1,6 +1,7 @@
 from ctypes import *
 import os
 import numpy as np
+import traceback
 
 def _checkReturn(code, name):
     if code!=0:
@@ -51,11 +52,17 @@ class LocalClient:
         _checkReturn(x,'vnxvideo_video_source_subscribe')
 
     def __onRawSample(self, sample, ts):
-        with RawSample(self.__vnxdll, sample) as s:
-            self.__userOnRawSample(s, ts)
+        try:
+            with RawSample(self.__vnxdll, sample) as s:
+                self.__userOnRawSample(s, ts)
+        except:
+            traceback.print_exc()
         return 0
-    def __onFormat(self, csp, w, h):
-        self.__userOnFormat(csp, w, h)
+    def __onFormat(self, emf, p, q):
+        try:
+            self.__userOnFormat(emf, p, q)
+        except:
+            traceback.print_exc()
         return 0
 
     def start(self):
@@ -194,25 +201,34 @@ PLANES4 = POINTER(c_uint8) * 4
 EMF_NONE = 0
 EMF_I420 = 1
 EMF_NV12 = 3
-EMF_AUDIO = 31
+EMF_AUDIO   = 31
+EMF_LPCM16  = 32 # S16 packed
+# formats below are given for reference only.
+# viinex renderer should convert audio to singed int16 packed
+EMF_LPCM32  = 33 # S32 packed
+EMF_LPCMF   = 34 # float packed
+EMF_LPCM16P = 35 # S16 planar
+EMF_LPCM32P = 36 # S32 planar
+EMF_LPCMFP  = 37 # float planar
+
 
 class RawSample:
     __vnxdll : c_void_p
     __sample : c_void_p
     __strides : STRIDES4
     __planes : PLANES4
-    __w : c_int
-    __h : c_int
-    __csp : c_int
+    __p : c_int
+    __q : c_int
+    __emf : c_int
 
     def __init__(self, vnxdll, sample):
         self.__vnxdll=vnxdll
         self.__sample = c_void_p(None)
         self.__strides = STRIDES4(0,0,0,0)
         self.__planes = PLANES4(None,None,None,None)
-        self.__w=c_int(0)
-        self.__h=c_int(0)
-        self.__csp=c_int(0)
+        self.__p=c_int(0)
+        self.__q=c_int(0)
+        self.__emf=c_int(0)
         x=self.__vnxdll.vnxvideo_raw_sample_dup(c_void_p(sample), byref(self.__sample))
         _checkReturn(x,'vnxvideo_raw_sample_dup')
 
@@ -228,60 +244,99 @@ class RawSample:
     def __del__(self):
         self.free()
     def _get_data(self):
-        if self.__csp.value != EMF_NONE:
+        if self.__emf.value != EMF_NONE:
             return
-        x=self.__vnxdll.vnxvideo_raw_sample_get_format(self.__sample, byref(self.__csp), byref(self.__w), byref(self.__h))
+        x=self.__vnxdll.vnxvideo_raw_sample_get_format(self.__sample, byref(self.__emf), byref(self.__p), byref(self.__q))
         _checkReturn(x,'vnxvideo_raw_sample_get_format')
-        if self.__csp.value != EMF_I420 and self.__csp.value != EMF_NV12 and self.__csp.value < EMF_AUDIO:
-            raise "Viinex frame formats other than YUV420 planar and NV12 are not supported here"
+        if self.__emf.value != EMF_I420 and self.__emf.value != EMF_NV12 and self.__emf.value < EMF_AUDIO:
+            raise Exception("Viinex frame formats other than YUV420 planar and NV12 are not supported here")
         x=self.__vnxdll.vnxvideo_raw_sample_get_data(self.__sample, self.__strides, self.__planes)
         _checkReturn(x,'vnxvideo_raw_sample_get_data')
 
     @property
+    def format(self):
+        self._get_data()
+        return self.__emf.value
+
+    @property
+    def p(self):
+        self._get_data()
+        return self.__p.value
+
+    @property
+    def q(self):
+        self._get_data()
+        return self.__q.value
+
+    @property
     def width(self):
         self._get_data()
-        return self.__w.value
+        if self.__emf.value < EMF_AUDIO:
+            return self.__p.value
+        else:
+            raise Exception("This is not a video frame")
 
     @property
     def height(self):
         self._get_data()
-        return self.__h.value
+        if self.__emf.value < EMF_AUDIO:
+            return self.__q.value
+        else:
+            raise Exception("This is not a video frame")
+
+    @property
+    def nb_samples(self):
+        self._get_data()
+        if self.__emf.value > EMF_AUDIO:
+            return self.__p.value
+        else:
+            raise Exception("This is not an audio frame")
+
+    @property
+    def channels(self):
+        self._get_data()
+        if self.__emf.value > EMF_AUDIO:
+            return self.__q.value
+        else:
+            raise Exception("This is not an audio frame")
 
     @property
     def is_audio(self):
-        self._get_data()
-        return self.__csp.value >= EMF_AUDIO
+        return self.format >= EMF_AUDIO
 
     @property
     def is_video(self):
-        self._get_data()
-        return self.__csp.value < EMF_AUDIO
+        return self.format < EMF_AUDIO
 
     def gray8(self):
         self._get_data()
-        y = np.ctypeslib.as_array(self.__planes[0], (self.__h.value, self.__strides[0]))
-        if self.__w.value == self.__strides[0]:
+        if self.__emf.value > EMF_AUDIO:
+            raise Exception("This is not a video frame")
+        y = np.ctypeslib.as_array(self.__planes[0], (self.__q.value, self.__strides[0]))
+        if self.__p.value == self.__strides[0]:
             return y
         else:
-            return y[:, 0:(self.__w.value-1)]
+            return y[:, 0:(self.__p.value-1)]
 
     def yuv(self):
         self._get_data()
-        y = np.ctypeslib.as_array(self.__planes[0], (self.__h.value, self.__strides[0]))
-        if self.__w.value != self.__strides[0]:
-            y = y[:, 0:(self.__w.value-1)]
+        if self.__emf.value > EMF_AUDIO:
+            raise Exception("This is not a video frame")
+        y = np.ctypeslib.as_array(self.__planes[0], (self.__q.value, self.__strides[0]))
+        if self.__p.value != self.__strides[0]:
+            y = y[:, 0:(self.__p.value-1)]
 
-        if self.__csp.value == EMF_I420:
-            w2 = round(self.__w.value / 2)
-            h2 = round(self.__h.value / 2)
+        if self.__emf.value == EMF_I420:
+            w2 = round(self.__p.value / 2)
+            h2 = round(self.__q.value / 2)
             u = np.ctypeslib.as_array(self.__planes[1], (h2, self.__strides[1]))
             if self.__strides[1] != w2:
                 u = u[:, 0:(w2 - 1)]
             v = np.ctypeslib.as_array(self.__planes[2], (h2, self.__strides[2]))
             if self.__strides[2] != w2:
                 v = v[:, 0:(w2 - 1)]
-        if self.__csp.value == EMF_NV12:
-            uv = np.ctypeslib.as_array(self.__planes[1], (self.__h.value, self.__strides[1]))
+        if self.__emf.value == EMF_NV12:
+            uv = np.ctypeslib.as_array(self.__planes[1], (self.__q.value, self.__strides[1]))
             u = uv[:, 0:2:]
             v = uv[:, 1:2:]
         return y,u,v
@@ -297,6 +352,20 @@ class RawSample:
         v  = v.reshape((v.shape[0], v.shape[1], 1))        
         yuv = np.concatenate((y, v, u), axis=2)
         return yuv2rgb(yuv) #np.dstack([y,u,v])/255.0
+
+    def lpcm_s16(self):
+        self._get_data()
+        if self.__emf.value != EMF_LPCM16:
+            raise Exception("This is not an LPCM S16 audio frame")
+        plane = cast(self.__planes[0], POINTER(c_int16))
+        # return each channel data as a separate row in resulting numpy matrix.
+        # packed format of input is equivalent to "Fortran" element order
+        # (channels innermost, i.e. columns of the matrix that we want to return),
+        # so we need to transpose it to get what we want.
+        # resulting matrix shape is (channels, nb_samples)
+        v = np.ctypeslib.as_array(plane, (self.nb_samples, self.channels)).T
+        return v
+
 
 def yuv2rgb(yuv):
     m = np.array([
